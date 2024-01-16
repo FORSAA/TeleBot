@@ -1,3 +1,4 @@
+import _io
 from typing import BinaryIO
 
 import selenium.types
@@ -97,9 +98,8 @@ def get_exercises(browser: webdriver.Chrome, is_photo:bool, date_offset:int) -> 
         return return_string
     else:
         if (exercises_table.screenshot(r'\screenshots\Homework_Screenshot.png')):
-            with open(os.getcwd()+r'\screenshots\Homework_Screenshot.png', 'rb') as screenshot:
-                print(f'DEBUG | INFO | OPENING AND RETURNING SCREENSHOT FILE.')
-                return screenshot
+            print(f'DEBUG | INFO | RETURNING SCREENSHOT.')
+            return 'screenshot'
         else:
             print(f'DEBUG | INFO | SCREENSHOT ERROR. RETURNING.')
             return 'screenshot_error'
@@ -132,7 +132,7 @@ def get_homework(auth_data: dict, is_photo: bool, date_offset:int) -> str:
     if (browser.current_url.endswith('SecurityWarning.asp')):
         do_after_login_process(browser)
 
-    return_data:str | BinaryIO = get_exercises(browser, is_photo, date_offset)
+    return_data:str | _io.BufferedReader = get_exercises(browser, is_photo, date_offset)
 
     log_out(browser)
 
@@ -142,8 +142,32 @@ def get_homework(auth_data: dict, is_photo: bool, date_offset:int) -> str:
 
 
 if __name__=='__main__':
-    test_data = {
-        'login':'ЗахаровЕ9',
-        'password':'5084433'
-    }
-    get_homework(test_data, True, 0)
+    exercise_num = "1"
+    exercise_name = "Math"
+    exercise_time = "10:00, Room 101"
+    exercise_task = "Do exercises 1-5"
+
+    # Заголовки
+    headers = ["№", "Название", "Время", "Задание"]
+
+    # Форматирование данных
+    formatted_data = [
+        [exercise_num, exercise_name, exercise_time, exercise_task]
+    ]
+
+    # Вывод заголовков
+    header_row = [header.center(15) for header in headers]
+    header_line = "+"+"+".join(["-"*15]*len(headers))+"+"
+
+    # Вывод данных
+    data_rows = []
+    for row in formatted_data:
+        formatted_row = "|".join([str(item).center(15) for item in row])
+        data_rows.append(formatted_row)
+
+    # Вывод таблицы
+    table = f"{header_line}\n|{'|'.join(header_row)}|\n{header_line}\n"
+    table += "\n".join([f"|{data_row}|" for data_row in data_rows])
+    table += f"\n{header_line}"
+
+    print(table)

@@ -1,7 +1,8 @@
 #  IMPORTS
+import _io
 from datetime import timedelta, datetime
 
-from typing import BinaryIO
+from tabulate import tabulate
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By
@@ -38,7 +39,7 @@ user_states = {}
 separator = ':'
 
 pages = {
-    'start':{'message_text':'Добро пожаловать в главное меню телеграмм бота! Используйте кнопки ниже для навигации.',
+    'start':{'message_text':'Добро пожаловать в главное меню телеграмм бота!\n\n Используйте кнопки ниже для навигации.',
              'markup_data':{
                  'Смена Логина/Пароля':{'callback_data':'auth_data_edit'},
                  'Как пользоваться?':{'callback_data':'help'},
@@ -60,14 +61,22 @@ pages = {
                         'Текст':{'callback_data':'homework_wish_text'},
                         'Фотография':{'callback_data':'homework_wish_photo'}
                     }
-
-    },
-
+                    },
+    'day_select_page':{'message_text':'Выберите день недели домашнее задание для которого вас интересует',
+                       'markup_data':{
+                           'Понедельник':{'callback_data':'0_day'},
+                           'Вторник':{'callback_data':'1_day'},
+                           'Среда':{'callback_data':'2_day'},
+                           'Четверг':{'callback_data':'3_day'},
+                           'Пятница':{'callback_data':'4_day'},
+                           'Суббота':{'callback_data':'5_day'}
+                       }
+                       },
     'debug_page':{'message_text':str(),
                   'markup_data':{
                       '« Вернуться в главное меню':{'callback_data':'menu'}
                   }
-                  }
+                  },
 
 }
 
@@ -86,21 +95,21 @@ def get_date(offset: int) -> str:
 
     return f'{weekday}, {day_num} {month} {year} г.'
 
+from datetime import datetime, timedelta
+
+def days_until_next_weekday(target_weekday):
+    weekdays = ['понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота', 'воскресенье']
+
+    current_day_index = datetime.now().weekday()
+
+    difference = target_weekday - current_day_index
+
+    # if difference < 0:
+    #     difference += 7
+
+    return difference
+
 # ====GETTING HOMEWORK FUNCTIONS========
-
-def return_data_handler(return_data: str|BinaryIO) -> str|BinaryIO:
-    if (type(return_data) is str):
-
-        if (return_data not in ['screenshot_error', 'login_error']):
-            return return_data
-        elif (return_data=='screenshot_error'):
-            return 'Ошибка при создании фото. Повторите попытку.'
-        elif (return_data=='login_error'):
-            return 'Ошибка при входе в аккаунт. Проверьте ваш логин/пароль и повторите попытку.'
-
-    else:
-        return return_data
-
 
 def login_to_account(login: str, password: str, browser: webdriver.Chrome):
     browser.get("https://e-school.obr.lenreg.ru/authorize/login")
@@ -131,43 +140,38 @@ def do_after_login_process(browser: webdriver.Chrome):
 
 
 def log_out(browser: webdriver.Chrome):
-    out_button = browser.find_element(By.XPATH, "//a[@href='JavaScript:Logout(true);']")
-    out_button.click()
-    sleep(0.1)
-    out_button = browser.find_element(By.XPATH, "//button[@class='btn btn-primary']")
-    out_button.click()
+    browser.find_element(By.XPATH, "//a[@href='JavaScript:Logout(true);']").click()
+    sleep(0.7)
+    browser.find_element(By.XPATH, "//button[@class='btn btn-primary']").click()
 
 
-def get_exercises(browser: webdriver.Chrome, is_photo: bool, date_offset: int) -> BinaryIO|str:
+def get_exercises(browser: webdriver.Chrome, is_photo: bool, date_offset: int) -> str:
     date_with_offset = get_date(date_offset)
 
     exercises_table = browser.find_element(By.XPATH, f"//span[contains(., '{date_with_offset}')]").find_element(
         By.XPATH, '..').find_element(By.XPATH, '..').find_element(By.XPATH, '..')
     exercises_rows = exercises_table.find_elements(By.XPATH, ".//tr[@class='ng-scope']")
 
-    if (not is_photo):
-        formatted_strings = []
+    if not is_photo:
+        rows = []
         print(f'DEBUG | INFO | GETTING ROWS AND FORMATTING STRINGS.')
         for row in exercises_rows:
-            exercise_num = row.find_elements(By.XPATH, ".//td[@class='num_subject ng-binding']")[0].text
-
-            exercise_name_and_time = row.find_elements(By.XPATH, ".//td")[1]
-            exercise_name = exercise_name_and_time.find_element(By.XPATH,
-                                                                ".//a[@class='subject ng-binding ng-scope']").text
-            exercise_time = exercise_name_and_time.find_element(By.XPATH,
-                                                                ".//div[@class='time ng-binding ng-scope']").text
-
-            exercise_task = row.find_element(By.XPATH, ".//td[@class='hidden-mobile wrapper_three_dots']").text
-
-            formatted_strings.append(
-                f'Урок №{exercise_num} | {exercise_name.center(35)} | {exercise_time.center(29)} | {exercise_task}\n')
-        return_string = ''.join(formatted_strings)
+            rows.append([row.text])
+        return_string = f'\n'
+        for item in rows:
+            item_text = '\n'.join(item)
+            item_text = item_text.split('\n')
+            lesson_number = item_text[0]
+            subject = item_text[1]
+            time_and_room = item_text[2]
+            task = item_text[3] if len(item_text) > 3 else ""
+            formatted_item = f"Урок №{lesson_number}: Предмет: {subject}\nВремя/Кабинет: {time_and_room}\nЗадание: {task}\n\n {'='*40}\n\n"
+            return_string+=formatted_item
         return return_string
     else:
         if (exercises_table.screenshot(os.getcwd()+r'\screenshots\Homework_Screenshot.png')):
-            with open(os.getcwd()+r'\screenshots\Homework_Screenshot.png', 'rb') as screenshot:
-                print(f'DEBUG | INFO | OPENING AND RETURNING SCREENSHOT FILE.')
-                return screenshot
+            print(f'DEBUG | INFO | OPENING AND RETURNING SCREENSHOT FILE.')
+            return 'screenshot'
         else:
             print(f'DEBUG | INFO | SCREENSHOT ERROR. RETURNING.')
             return 'screenshot_error'
@@ -178,7 +182,7 @@ def get_homework(auth_data: dict, is_photo: bool, date_offset: int) -> str:
 
     browser_options = Options()
 
-    # browser_options.add_argument("--headless=new")
+    browser_options.add_argument("--headless=new")
     browser_options.add_argument("--window-size=1000,750")
 
     browser = webdriver.Chrome(options=browser_options)
@@ -199,7 +203,7 @@ def get_homework(auth_data: dict, is_photo: bool, date_offset: int) -> str:
     if (browser.current_url.endswith('SecurityWarning.asp')):
         do_after_login_process(browser)
 
-    return_data: str|BinaryIO = get_exercises(browser, is_photo, date_offset)
+    return_data: str = get_exercises(browser, is_photo, date_offset)
 
     log_out(browser)
 
@@ -259,13 +263,16 @@ def auth_data_reader(message: types.Message):
     return
 
 
-def send_error(message: types.Message, reason:str, func_name:str):
+def send_error(message: types.Message, reason:str, func_name:str, is_deleting_prev:bool = False):
     user_id = message.chat.id
     local_bot_last_message: types.Message = user_states[user_id]['bot_last_message']
 
+    if (is_deleting_prev):
+        bot.delete_message(user_id, local_bot_last_message.message_id)
+
     user_states[user_id]['bot_last_error_message'] = bot.send_message(message.chat.id, f'При обработке возникла ошибка. Причина: {reason}\n\nВы будете возвращены в главное меню, оттуда вы сможете повторить действие.')
     print(f'DEBUG | ERROR | IN {func_name} | REASON: {reason}')
-    sleep(4)
+    sleep(2.5)
     bot.delete_message(user_states[user_id]['bot_last_error_message'].chat.id, user_states[user_id]['bot_last_error_message'].message_id)
 
 
@@ -275,7 +282,7 @@ def send_succsesfully(message:types.Message, reason:str, func_name:str):
 
     user_states[user_id]['bot_last_error_message'] = bot.send_message(message.chat.id, f'{reason}!\n\nВы будете возвращены в главное меню.')
     print(f'DEBUG | SUCCESSFULLY | IN {func_name} | REASON: {reason}')
-    sleep(4)
+    sleep(2.5)
     bot.delete_message(user_states[user_id]['bot_last_error_message'].chat.id, user_states[user_id]['bot_last_error_message'].message_id)
 
 
@@ -286,10 +293,10 @@ def render_page(page: pages, message: types.Message, del_prev_bot_message: bool 
     if del_prev_bot_message and (local_bot_last_message is not None):
         bot.delete_message(local_bot_last_message.chat.id, local_bot_last_message.message_id)
 
-    new_bot_last_message = bot.send_message(message.chat.id, page['message_text'], reply_markup=markup_generator(page))
+    new_bot_last_message = bot.send_message(message.chat.id, page['message_text'], reply_markup=markup_generator(page, markup_row_width))
     user_states[user_id]['bot_last_message'] = new_bot_last_message
 
-    print(f'DEBUG | INFO | RENDERING PAGE "{pages}" | USER_ID = {user_id} | BOT_LAST_MESSAGE_ID = {new_bot_last_message.message_id}')
+    print(f'DEBUG | INFO | RENDERING PAGE "{page}" | USER_ID = {user_id} | BOT_LAST_MESSAGE_ID = {new_bot_last_message.message_id}')
 
 
 #  ========MAIN========
@@ -319,6 +326,10 @@ def start(message: types.Message, by_another_func:bool = False) -> None:
 def debug(message: types.Message) -> None:
     user_id = message.chat.id
 
+    if (user_id not in user_states):
+        add_to_states(user_id)
+        print(f'DEBUG | INFO | ADDED TO STATES | CHAT_ID: {message.chat.id} | NEW STATES = {user_states}')
+
     user_states[user_id]['menu_state'] = 'debug'
     print(f'DEBUG | INFO | DEBUG_MENU | CHAT_ID: {message.chat.id}')
 
@@ -347,9 +358,14 @@ def menu_callback_handler(call: types.CallbackQuery) -> None:
 @bot.callback_query_handler(func=lambda call: call.data == 'auth_data_edit')
 def auth_data_edit_query_handler(call: types.CallbackQuery) -> None:
     user_id = call.from_user.id
+
+    if (user_id not in user_states):
+        add_to_states(user_id)
+        print(f'DEBUG | INFO | ADDED TO STATES | CHAT_ID: {user_id} | NEW STATES = {user_states}')
+
     local_bot_last_message: types.Message = user_states[user_id]['bot_last_message']
 
-    user_states[user_id]['menu_state'] = 'start'
+    user_states[user_id]['menu_state'] = 'auth_data_edit'
     print(f'DEBUG | INFO | AUTH_DATA_EDIT | CHAT_ID: {call.message.chat.id}')
 
     user_states[user_id]['menu_state'] = 'auth_edit'
@@ -360,6 +376,11 @@ def auth_data_edit_query_handler(call: types.CallbackQuery) -> None:
 @bot.callback_query_handler(func=lambda call: call.data == 'help')
 def help_callback_handler(call: types.CallbackQuery):
     user_id = call.from_user.id
+
+    if (user_id not in user_states):
+        add_to_states(user_id)
+        print(f'DEBUG | INFO | ADDED TO STATES | CHAT_ID: {user_id} | NEW STATES = {user_states}')
+
     local_bot_last_message: types.Message = user_states[user_id]['bot_last_message']
 
     print(f'DEBUG | INFO | HELP_MENU | CHAT_ID: {call.message.chat.id}')
@@ -370,17 +391,63 @@ def help_callback_handler(call: types.CallbackQuery):
 @bot.callback_query_handler(func=lambda call: call.data=='get_homework')
 def get_homework_callback_handler(call: types.CallbackQuery):
     user_id = call.from_user.id
+
+    if (user_id not in user_states):
+        add_to_states(user_id)
+        print(f'DEBUG | INFO | ADDED TO STATES | CHAT_ID: {user_id} | NEW STATES = {user_states}')
+
     local_bot_last_message: types.Message = user_states[user_id]['bot_last_message']
 
     render_page(pages['get_homework'], call.message)
 
-@bot.callback_query_handler(func=lambda call: call.data=='homework_wish_photo' or call.data=='homework_wish_text')
+@bot.callback_query_handler(func=lambda call: call.data in ['homework_wish_photo', 'homework_wish_text'])
 def homework_wish_type_callback_handler(call: types.CallbackQuery):
     user_id = call.from_user.id
     local_bot_last_message: types.Message = user_states[user_id]['bot_last_message']
 
     if (user_states[user_id]['auth_state']==1):
         if (call.data=='homework_wish_photo'):
-                user_states[user_id]['bot_last_message'] = bot.send_photo(call.message.chat.id, return_data_handler(get_homework(user_states[user_id]['auth_data'], True, 0)))
+            user_states[user_id]['photo_mode'] = True
+        else:
+            user_states[user_id]['photo_mode'] = False
+    else:
+        send_error(call.message, 'Не введен пароль для авторизации и получения домашнего задания/расписания.', 'homework_wish_type_callback_hadler', True)
+        start(call.message, True)
+        return
+
+    render_page(pages['day_select_page'], call.message, markup_row_width=3)
+
+@bot.callback_query_handler(func=lambda call: call.data in ['0_day', '1_day', '2_day', '3_day', '4_day', '5_day'])
+def change_day_callback_handler(call: types.CallbackQuery):
+    user_id = call.from_user.id
+    local_bot_last_message: types.Message = user_states[user_id]['bot_last_message']
+
+    day_wish = int(call.data[0])
+
+    offset:int = days_until_next_weekday(day_wish)
+
+    bot.delete_message(user_id, local_bot_last_message.message_id)
+    user_states[user_id]['bot_last_message'] = bot.send_message(user_id, f'Получение домашнего задания на {get_date(offset)}..')
+    local_bot_last_message: types.Message = user_states[user_id]['bot_last_message']
+
+    auth_data = user_states[user_id]['auth_data']
+    is_photo = user_states[user_id]['photo_mode']
+
+    returned_data = get_homework(auth_data, is_photo, offset)
+
+    bot.delete_message(user_id, local_bot_last_message.message_id)
+
+    if (returned_data == 'screenshot'):
+        with open(os.getcwd()+r'\screenshots\Homework_Screenshot.png', 'rb') as screenshot:
+            user_states[user_id]['bot_last_message'] = bot.send_photo(user_id, screenshot, f'Домашнее задание на {get_date(offset)}')
+        path = os.getcwd()+r'\screenshots\Homework_Screenshot.png'
+        os.remove(path)
+    elif (type(returned_data) is str and 'error' not in returned_data):
+        user_states[user_id]['bot_last_message'] = bot.send_message(user_id, f'Домашнее задание на {get_date(offset)}\n{returned_data}\n') #  , reply_markup=quick_markup({'Вернуться в меню':{'callback_data':'menu'}})
+    else:
+        send_error(call.message, returned_data, 'homework_wish_type_callback_hadler')
+
+    start(call.message, True)
+
 
 bot.polling()
