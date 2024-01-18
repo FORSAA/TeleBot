@@ -1,4 +1,4 @@
-from functions.test_auth_data_saver import test_auth_data_saver
+from Functions.test_auth_data_saver import test_auth_data_saver
 from telebot import types
 
 def auth_data_reader(message: types.Message):

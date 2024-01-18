@@ -57,7 +57,7 @@ class TelegramBot():
             self.bot.clear_step_handler_by_chat_id(user_id)
 
             if (user_id not in user_states):
-                add_to_states(user_id)
+                add_to_states(user_id, user_states)
                 print(f'DEBUG | INFO | ADDED TO STATES | CHAT_ID: {message.chat.id} | NEW STATES = {user_states}')
 
             user_states[user_id]['menu_state'] = 'start'
@@ -205,3 +205,6 @@ if __name__=='__main__':
     Bot = TelegramBot('6070580163:AAFKRJt7nnNWL__vunKkFVz1r1IZ6xDJgXI')
 
     Bot.run()
+    # print(user_states)
+    # add_to_states(111)
+    # print(user_states)

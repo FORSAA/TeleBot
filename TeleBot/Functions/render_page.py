@@ -1,5 +1,5 @@
 from telebot import types
-from classes.BotClass import pages
+from Classes.BotClass import pages
 
 def render_page(page: pages, message: types.Message, del_prev_bot_message: bool = True, markup_row_width: int = 2) -> None:
     user_id = message.chat.id
